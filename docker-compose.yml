@@ -1,0 +1,48 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: bun run apps/api/src/index.ts
+    ports:
+      - "3000:3000"
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sandbox-workspaces:/var/machina/workspaces
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: bun run apps/api/src/worker.ts
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sandbox-workspaces:/var/machina/workspaces
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: machina
+      POSTGRES_PASSWORD: machina
+      POSTGRES_DB: machina_factory
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U machina"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  sandbox-workspaces:

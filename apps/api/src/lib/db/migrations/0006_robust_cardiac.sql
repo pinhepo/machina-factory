@@ -1,0 +1,1 @@
+ALTER TABLE "jobs" ADD COLUMN "project_context" jsonb;

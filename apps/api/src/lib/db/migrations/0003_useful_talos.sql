@@ -1,0 +1,1 @@
+ALTER TABLE "jobs" ADD COLUMN "create_repo_config" jsonb;

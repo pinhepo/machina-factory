@@ -1,0 +1,32 @@
+FROM oven/bun:1.2-debian AS base
+
+# Install git, Python, and common build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git curl ca-certificates openssh-client \
+    python3 python3-pip python3-venv zip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install machina-cli from GitHub (latest with direct client-api auth support)
+RUN pip3 install --break-system-packages "machina-cli @ git+https://github.com/machina-sports/machina-cli.git@main"
+
+WORKDIR /app
+
+# Install dependencies
+COPY package.json bun.lock turbo.json ./
+COPY packages/tsconfig/ packages/tsconfig/
+COPY packages/agent/package.json packages/agent/
+COPY packages/sandbox/package.json packages/sandbox/
+COPY packages/shared/package.json packages/shared/
+COPY apps/api/package.json apps/api/
+
+RUN bun install
+
+# Copy source
+COPY packages/ packages/
+COPY apps/api/ apps/api/
+
+# Use local sandbox mode (no Docker required)
+ENV SANDBOX_MODE=local
+ENV SANDBOX_WORKSPACES_DIR=/tmp/machina-workspaces
+
+CMD ["bun", "run", "apps/api/src/worker.ts"]

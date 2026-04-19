@@ -1,0 +1,22 @@
+services:
+  - type: worker
+    name: machina-factory-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile.worker
+    region: ohio
+    plan: starter
+    envVars:
+      - key: SANDBOX_MODE
+        value: local
+      - key: SANDBOX_WORKSPACES_DIR
+        value: /tmp/machina-workspaces
+      - key: POSTGRES_URL
+        sync: false
+      - key: GOOGLE_GENERATIVE_AI_API_KEY
+        sync: false
+      - key: GITHUB_APP_ID
+        sync: false
+      - key: GITHUB_APP_PRIVATE_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
