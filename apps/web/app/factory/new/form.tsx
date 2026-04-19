@@ -20,6 +20,10 @@ import {
   Search,
   Sparkles,
   X,
+  ChevronDown,
+  ChevronRight,
+  Zap,
+  AtSign,
 } from "lucide-react";
 import { createJob } from "./actions";
 import type { CreateJobState } from "./actions";
@@ -29,10 +33,13 @@ import type { MentionItem } from "./mention-hooks";
 const initialState: CreateJobState = { error: undefined };
 
 const inputClass =
-  "w-full rounded-lg border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 transition-colors focus:border-[#fe591f] focus:outline-none focus:ring-1 focus:ring-[#fe591f]";
+  "w-full rounded-md border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 transition-colors focus:border-[#fe591f] focus:outline-none focus:ring-1 focus:ring-[#fe591f]";
 
 const labelClass =
-  "mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300";
+  "mb-1.5 block text-[12px] font-medium text-zinc-700 dark:text-zinc-300";
+
+const sectionClass =
+  "rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950";
 
 interface OrgRepo {
   fullName: string;
@@ -93,7 +100,6 @@ function genId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-/** Walk the editor DOM and extract (a) serialized text (b) active chip items in order. */
 function readEditor(
   root: HTMLElement,
   chipRegistry: Map<string, MentionItem>,
@@ -121,7 +127,6 @@ function readEditor(
   return { text, chips };
 }
 
-/** Build a chip DOM element (contenteditable=false so browser treats it as atomic). */
 function buildChipElement(
   chipId: string,
   item: MentionItem,
@@ -131,7 +136,7 @@ function buildChipElement(
   span.contentEditable = "false";
   span.dataset.chipId = chipId;
   span.className =
-    "inline-flex items-center gap-1 mx-0.5 rounded-md bg-[#fe591f]/10 text-[#fe591f] border border-[#fe591f]/30 px-1.5 py-0.5 text-xs font-medium align-baseline select-none";
+    "inline-flex items-center gap-1 mx-0.5 rounded bg-[#fe591f]/10 text-[#fe591f] border border-[#fe591f]/25 px-1.5 py-0.5 text-[12px] font-mono align-baseline select-none";
 
   const typeSpan = document.createElement("span");
   typeSpan.className = "opacity-60";
@@ -194,34 +199,25 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
   });
   const [showTargetSearch, setShowTargetSearch] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(
-    Boolean(prefill?.modelId) || Boolean(prefill?.baseBranch && prefill.baseBranch !== "main"),
+    Boolean(prefill?.modelId) ||
+      Boolean(prefill?.baseBranch && prefill.baseBranch !== "main"),
   );
 
-  // Editor (uncontrolled) — React never writes children to this div after mount.
   const editorRef = useRef<HTMLDivElement>(null);
   const inputAreaRef = useRef<HTMLDivElement>(null);
-
-  // Chip registry keyed by DOM chipId (stable for the life of the DOM node).
   const chipRegistryRef = useRef<Map<string, MentionItem>>(new Map());
 
-  // State mirrors what's in the DOM — derived on input/chip-change. Used for
-  // picker dedupe, form submission, and UI counters. Not a source of truth for DOM.
   const [activeChips, setActiveChips] = useState<MentionItem[]>([]);
   const [taskText, setTaskText] = useState("");
   const [editorIsEmpty, setEditorIsEmpty] = useState(true);
 
-  // Mention picker state
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState("");
   const [pickerAnchor, setPickerAnchor] = useState<{
     top: number;
     left: number;
-  }>({
-    top: 0,
-    left: 0,
-  });
+  }>({ top: 0, left: 0 });
 
-  // Attachments
   const [images, setImages] = useState<AttachedImage[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -233,8 +229,6 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
     setActiveChips(chips);
     setEditorIsEmpty(root.childNodes.length === 0 || text === "");
 
-    // Garbage collect chip registry entries that no longer exist in the DOM.
-    const alive = new Set(chips.map((_, idx) => (chips[idx], null))); // placeholder — recompute below
     const aliveIds = new Set<string>();
     for (const node of Array.from(
       root.querySelectorAll<HTMLElement>("[data-chip-id]"),
@@ -245,7 +239,6 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
     for (const key of Array.from(chipRegistryRef.current.keys())) {
       if (!aliveIds.has(key)) chipRegistryRef.current.delete(key);
     }
-    void alive; // keep TS happy
   }, []);
 
   const detectMentionTrigger = useCallback(() => {
@@ -295,8 +288,6 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
     const rect = probe.getBoundingClientRect();
     const parent = inputAreaRef.current?.getBoundingClientRect();
     if (!parent || (!rect.width && !rect.height && !rect.top)) {
-      // Range may be collapsed in an unmeasured position; fall back to the
-      // editor's bounding box.
       const edit = root.getBoundingClientRect();
       setPickerAnchor({ top: edit.bottom - parent!.top + 4, left: 8 });
     } else {
@@ -311,7 +302,6 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
 
   const handleEditorInput = useCallback(() => {
     syncFromEditor();
-    // Defer so the browser has settled caret position.
     requestAnimationFrame(detectMentionTrigger);
   }, [syncFromEditor, detectMentionTrigger]);
 
@@ -383,9 +373,6 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
       return;
     }
 
-    // Delete the @query text, then insert either a chip (most types) or
-    // raw editable text (for `cmd` — users need to replace `<name>`
-    // placeholders before submitting).
     const delRange = document.createRange();
     delRange.setStart(node, atPos);
     delRange.setEnd(node, caret);
@@ -396,20 +383,13 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
     insertRange.setEnd(node, atPos);
 
     if (item.type === "cmd") {
-      // Insert as a single backtick-fenced text token so the user can
-      // edit placeholders like <name>, <dir>, or --flag values.
       const fence = `\`${item.title}\`\u00A0`;
       const textNode = document.createTextNode(fence);
       insertRange.insertNode(textNode);
-      // Put the caret just before the first `<` placeholder if there is
-      // one, so the user can start typing to replace it; otherwise park
-      // at the end of the inserted text.
       const placeholderIdx = item.title.indexOf("<");
       const newRange = document.createRange();
       if (placeholderIdx >= 0) {
-        // +1 because of the leading backtick we added
         newRange.setStart(textNode, placeholderIdx + 1);
-        // Select through the matching '>' so typing replaces it
         const endIdx = item.title.indexOf(">", placeholderIdx);
         newRange.setEnd(
           textNode,
@@ -426,13 +406,10 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
       chipRegistryRef.current.set(chipId, item);
       const chipEl = buildChipElement(chipId, item, removeChipFromDom);
 
-      // Insert the chip at the current range position, then a trailing space
-      // text node to keep the caret out of the chip.
       const afterTextNode = document.createTextNode("\u00A0");
       insertRange.insertNode(afterTextNode);
       insertRange.insertNode(chipEl);
 
-      // Move caret after the trailing space.
       const newRange = document.createRange();
       newRange.setStartAfter(afterTextNode);
       newRange.collapse(true);
@@ -440,18 +417,18 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
       sel.addRange(newRange);
     }
 
-    // Side effects on form state
     if (item.type === "repo" && mode === "existing") {
       const r = item.data as OrgRepo;
-      const ownerInput = document.querySelector(
-        "#repoOwner",
-      ) as HTMLInputElement | null;
-      const nameInput = document.querySelector(
-        "#repoName",
-      ) as HTMLInputElement | null;
-      if (ownerInput && nameInput && (!ownerInput.value || !nameInput.value)) {
-        ownerInput.value = r.owner;
-        nameInput.value = r.name;
+      if (!targetRepo) {
+        setTargetRepo({
+          fullName: r.fullName,
+          owner: r.owner,
+          name: r.name,
+          branch: r.defaultBranch,
+          description: r.description,
+          language: r.language,
+          isPrivate: r.isPrivate,
+        });
       } else {
         addRef(r);
       }
@@ -531,13 +508,14 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
   }));
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form action={formAction} className="space-y-5">
       {state.error && (
         <div className="rounded-lg border border-red-300 dark:border-red-800/50 bg-red-50 dark:bg-red-950/50 px-4 py-3 text-sm text-red-600 dark:text-red-300">
           {state.error}
         </div>
       )}
 
+      {/* Hidden inputs — preserve the exact contract with createJob() */}
       <input type="hidden" name="task" value={taskText} />
       <input
         type="hidden"
@@ -615,7 +593,6 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
             if (!root) return;
             chipRegistryRef.current.clear();
             root.textContent = text;
-            // Move caret to end
             const range = document.createRange();
             range.selectNodeContents(root);
             range.collapse(false);
@@ -628,15 +605,20 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
         />
       )}
 
-      {/* Task */}
+      {/* Task editor */}
       <div>
-        <div className={labelClass}>
-          Task <span className="text-red-400">*</span>
+        <div className="flex items-baseline justify-between mb-1.5">
+          <label className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300">
+            Task <span className="text-red-400">*</span>
+          </label>
+          <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
+            {taskText.length > 0 && `${taskText.length} chars`}
+          </span>
         </div>
 
         <div
           ref={inputAreaRef}
-          className="relative w-full rounded-xl border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 transition-colors focus-within:border-[#fe591f] focus-within:ring-1 focus-within:ring-[#fe591f]"
+          className="relative w-full rounded-xl border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-zinc-950 transition-colors focus-within:border-[#fe591f] focus-within:ring-1 focus-within:ring-[#fe591f] shadow-sm"
         >
           {/** biome-ignore lint/a11y/useFocusableInteractive: contenteditable */}
           {/** biome-ignore lint/a11y/noStaticElementInteractions: contenteditable */}
@@ -658,15 +640,16 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
                 e.preventDefault();
               }
             }}
-            className="min-h-[96px] max-h-[240px] overflow-y-auto w-full px-3 py-2.5 text-sm text-zinc-900 dark:text-zinc-100 focus:outline-none whitespace-pre-wrap break-words"
+            className="min-h-[120px] max-h-[260px] overflow-y-auto w-full px-3.5 py-3 text-[13px] leading-relaxed text-zinc-900 dark:text-zinc-100 focus:outline-none whitespace-pre-wrap break-words"
           />
           {editorIsEmpty && (
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute top-2.5 left-3 text-sm text-zinc-400 dark:text-zinc-500"
+              className="pointer-events-none absolute top-3 left-3.5 text-[13px] text-zinc-400 dark:text-zinc-500"
             >
-              Describe what the agent should do — type @ to mention a repo,
-              skill, or connector
+              Describe what the agent should do — type{" "}
+              <span className="font-mono text-[#fe591f]/70">@</span> to mention
+              a repo, skill, or connector
             </div>
           )}
 
@@ -675,7 +658,7 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
               {images.map((img) => (
                 <div
                   key={img.id}
-                  className="group relative inline-flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 pl-1 pr-2 py-1"
+                  className="group relative inline-flex items-center gap-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900 pl-1 pr-2 py-1"
                 >
                   {/** biome-ignore lint/performance/noImgElement: base64 preview */}
                   {/** biome-ignore lint/nursery/useImageSize: base64 preview */}
@@ -700,14 +683,14 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
             </div>
           )}
 
-          <div className="flex items-center gap-1 border-t border-zinc-200/60 dark:border-zinc-800/60 px-2 py-1.5">
+          <div className="flex items-center gap-1 border-t border-zinc-200/70 dark:border-zinc-800/70 px-2 py-1.5 bg-zinc-50/50 dark:bg-zinc-900/30 rounded-b-xl">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
               title="Attach screenshot"
             >
-              <ImagePlus className="h-4 w-4" />
+              <ImagePlus className="h-3.5 w-3.5" />
               Attach
             </button>
             <input
@@ -718,18 +701,20 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
               onChange={handleImagePick}
               className="hidden"
             />
-            <span className="ml-auto text-[11px] text-zinc-400">
-              Type{" "}
-              <kbd className="rounded bg-zinc-200 dark:bg-zinc-800 px-1 font-mono">
-                @
-              </kbd>{" "}
-              to mention
-              {activeChips.length > 0 && <> • {activeChips.length} mentioned</>}
+            <span className="ml-auto text-[11px] text-zinc-400 dark:text-zinc-500 flex items-center gap-2">
+              <span className="inline-flex items-center gap-1">
+                <AtSign className="h-3 w-3" />
+                mention
+              </span>
+              {activeChips.length > 0 && (
+                <span className="text-[#fe591f]">
+                  {activeChips.length} selected
+                </span>
+              )}
               {images.length > 0 && (
-                <>
-                  {" "}
-                  • {images.length} image{images.length > 1 ? "s" : ""}
-                </>
+                <span>
+                  {images.length} image{images.length > 1 ? "s" : ""}
+                </span>
               )}
             </span>
           </div>
@@ -746,9 +731,10 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
         </div>
       </div>
 
+      {/* Plan mode */}
       <label
         htmlFor="executionMode"
-        className="inline-flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300 cursor-pointer select-none"
+        className="flex items-center gap-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 px-3 py-2 text-[13px] text-zinc-700 dark:text-zinc-300 cursor-pointer select-none hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors"
       >
         <input
           type="checkbox"
@@ -759,24 +745,22 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
           onChange={(e) => setPlanMode(e.target.checked)}
           className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700 text-[#fe591f] focus:ring-[#fe591f]"
         />
-        <ListTodo className="h-4 w-4 text-zinc-400" />
-        <span>Review plan before running</span>
-        <span className="text-xs text-zinc-400 dark:text-zinc-500 ml-0.5">
-          (recommended)
+        <ListTodo className="h-3.5 w-3.5 text-zinc-400" />
+        <span className="font-medium">Review plan before running</span>
+        <span className="text-[11px] text-zinc-400 dark:text-zinc-500 ml-auto">
+          recommended
         </span>
       </label>
 
       {!isContinuation && (
-        <div className="flex items-center gap-4 text-sm">
-          <RadioPill
-            name="repoModePick"
+        <div className="inline-flex rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-100/60 dark:bg-zinc-900 p-0.5 text-sm">
+          <SegmentButton
             active={mode === "existing"}
             onClick={() => setMode("existing")}
             icon={<GitBranch className="h-3.5 w-3.5" />}
             label="Existing repo"
           />
-          <RadioPill
-            name="repoModePick"
+          <SegmentButton
             active={mode === "create"}
             onClick={() => setMode("create")}
             icon={<Sparkles className="h-3.5 w-3.5" />}
@@ -786,11 +770,13 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
       )}
 
       {mode === "existing" && (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 p-4 space-y-3">
-          <div className={labelClass}>
-            Target Repository <span className="text-red-400">*</span>
+        <div className={`${sectionClass} p-4 space-y-3`}>
+          <div className="flex items-baseline justify-between">
+            <div className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+              <GitBranch className="h-3.5 w-3.5 text-zinc-400" />
+              Target Repository <span className="text-red-400">*</span>
+            </div>
           </div>
-          {/* Hidden inputs the form action reads */}
           <input
             type="hidden"
             name="repoOwner"
@@ -803,37 +789,10 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
           />
 
           {targetRepo ? (
-            <div className="flex items-center gap-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2.5">
-              <GitBranch className="h-4 w-4 shrink-0 text-zinc-400" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                    {targetRepo.fullName}
-                  </span>
-                  {targetRepo.isPrivate && <PrivateBadge />}
-                  {targetRepo.language && (
-                    <span className="shrink-0 rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
-                      {targetRepo.language}
-                    </span>
-                  )}
-                </div>
-                {targetRepo.description && (
-                  <p className="text-xs text-zinc-500 truncate mt-0.5">
-                    {targetRepo.description}
-                  </p>
-                )}
-              </div>
-              <span className="shrink-0 rounded-md bg-zinc-100 dark:bg-zinc-800 px-2 py-1 font-mono text-xs text-zinc-500">
-                {targetRepo.branch}
-              </span>
-              <button
-                type="button"
-                onClick={() => setTargetRepo(null)}
-                className="shrink-0 rounded-md p-1 text-zinc-400 transition-colors hover:bg-red-500/10 hover:text-red-400"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+            <RepoCard
+              repo={targetRepo}
+              onRemove={() => setTargetRepo(null)}
+            />
           ) : showTargetSearch ? (
             <RepoSearchDropdown
               selectedFullNames={[]}
@@ -855,23 +814,27 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
             <button
               type="button"
               onClick={() => setShowTargetSearch(true)}
-              className="w-full rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2.5 text-sm text-zinc-500 dark:text-zinc-400 transition-colors hover:border-[#fe591f] hover:text-[#fe591f]"
+              className="w-full rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/30 px-3 py-2.5 text-[13px] text-zinc-500 dark:text-zinc-400 transition-colors hover:border-[#fe591f] hover:text-[#fe591f]"
             >
               Pick the repo to work in…
             </button>
           )}
 
-          {/* Advanced: base branch + model override */}
-          <div className="pt-2">
+          <div className="pt-1 border-t border-zinc-200/60 dark:border-zinc-800/60">
             <button
               type="button"
               onClick={() => setShowAdvanced((v) => !v)}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+              className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 mt-2"
             >
-              {showAdvanced ? "▾" : "▸"} Advanced
+              {showAdvanced ? (
+                <ChevronDown className="h-3 w-3" />
+              ) : (
+                <ChevronRight className="h-3 w-3" />
+              )}
+              Advanced
               {!showAdvanced && (
                 <span className="text-zinc-400 dark:text-zinc-500 font-normal ml-1">
-                  base branch, model override
+                  base branch · model override
                 </span>
               )}
             </button>
@@ -904,9 +867,7 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
                     className={inputClass}
                   />
                   <p className="mt-1 text-[10px] text-zinc-400 dark:text-zinc-500">
-                    Leave blank to use the default configured on this
-                    environment. Only providers whose API keys are set
-                    will actually run.
+                    Leave blank to use the environment default.
                   </p>
                 </div>
               </div>
@@ -916,9 +877,9 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
       )}
 
       {mode === "create" && (
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 p-4 space-y-4">
-          <h3 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
+        <div className={`${sectionClass} p-4 space-y-4`}>
+          <h3 className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+            <Sparkles className="h-3.5 w-3.5 text-[#fe591f]" />
             New Repository
           </h3>
           <div className="grid grid-cols-2 gap-4">
@@ -955,32 +916,7 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
               Scaffold From <span className="text-red-400">*</span>
             </div>
             {fromRepo ? (
-              <div className="flex items-center gap-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2.5">
-                <GitBranch className="h-4 w-4 shrink-0 text-zinc-400" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                      {fromRepo.fullName}
-                    </span>
-                    {fromRepo.isPrivate && <PrivateBadge />}
-                  </div>
-                  {fromRepo.description && (
-                    <p className="text-xs text-zinc-500 truncate mt-0.5">
-                      {fromRepo.description}
-                    </p>
-                  )}
-                </div>
-                <span className="shrink-0 rounded-md bg-zinc-100 dark:bg-zinc-800 px-2 py-1 font-mono text-xs text-zinc-500">
-                  {fromRepo.branch}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setFromRepo(null)}
-                  className="shrink-0 rounded-md p-1 text-zinc-400 transition-colors hover:bg-red-500/10 hover:text-red-400"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+              <RepoCard repo={fromRepo} onRemove={() => setFromRepo(null)} />
             ) : showFromSearch ? (
               <RepoSearchDropdown
                 selectedFullNames={[]}
@@ -991,7 +927,7 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
               <button
                 type="button"
                 onClick={() => setShowFromSearch(true)}
-                className="w-full rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2.5 text-sm text-zinc-500 dark:text-zinc-400 transition-colors hover:border-[#fe591f] hover:text-[#fe591f]"
+                className="w-full rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-900/30 px-3 py-2.5 text-[13px] text-zinc-500 dark:text-zinc-400 transition-colors hover:border-[#fe591f] hover:text-[#fe591f]"
               >
                 Pick a base repo to scaffold from…
               </button>
@@ -1020,30 +956,30 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
                 defaultChecked
                 className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700 text-[#fe591f] focus:ring-[#fe591f]"
               />
-              <span className="text-sm text-zinc-700 dark:text-zinc-300 inline-flex items-center gap-1.5">
+              <span className="text-[13px] text-zinc-700 dark:text-zinc-300 inline-flex items-center gap-1.5">
                 <Lock className="h-3.5 w-3.5" />
                 Private repo
               </span>
             </label>
           </div>
 
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            We&apos;ll create <code>{`<org>/<name>`}</code>, copy all files from
-            the base repo as the initial commit (no history), then run the agent
-            on it.
+          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+            We&apos;ll create <code className="font-mono">{`<org>/<name>`}</code>,
+            copy all files from the base repo as the initial commit (no
+            history), then run the agent on it.
           </p>
         </div>
       )}
 
-      {/* Reference Repos — collapsed to a single line when empty */}
+      {/* Reference repos */}
       <div
-        className={`rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30 ${
+        className={`${sectionClass} ${
           refs.length > 0 || showRepoSearch ? "p-4 space-y-3" : "px-4 py-2.5"
         }`}
       >
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
-            <BookOpen className="h-4 w-4" />
+          <h3 className="text-[12px] font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+            <BookOpen className="h-3.5 w-3.5 text-zinc-400" />
             Reference Repos
             {refs.length > 0 && (
               <span className="rounded-full bg-[#fe591f]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#fe591f]">
@@ -1051,17 +987,17 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
               </span>
             )}
             {refs.length === 0 && !showRepoSearch && (
-              <span className="text-xs font-normal text-zinc-400 dark:text-zinc-500">
-                — optional
+              <span className="text-[11px] font-normal text-zinc-400 dark:text-zinc-500">
+                — optional, gives the agent more context
               </span>
             )}
           </h3>
           <button
             type="button"
             onClick={() => setShowRepoSearch(true)}
-            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-[#fe591f] transition-colors hover:bg-[#fe591f]/10"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-[#fe591f] transition-colors hover:bg-[#fe591f]/10"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="h-3 w-3" />
             Add
           </button>
         </div>
@@ -1069,40 +1005,11 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
         {refs.length > 0 && (
           <div className="space-y-2">
             {refs.map((ref, i) => (
-              <div
+              <RepoCard
                 key={ref.fullName}
-                className="flex items-center gap-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-2.5"
-              >
-                <GitBranch className="h-4 w-4 shrink-0 text-zinc-400" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
-                      {ref.fullName}
-                    </span>
-                    {ref.isPrivate && <PrivateBadge />}
-                    {ref.language && (
-                      <span className="shrink-0 rounded-full bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
-                        {ref.language}
-                      </span>
-                    )}
-                  </div>
-                  {ref.description && (
-                    <p className="text-xs text-zinc-500 truncate mt-0.5">
-                      {ref.description}
-                    </p>
-                  )}
-                </div>
-                <span className="shrink-0 rounded-md bg-zinc-100 dark:bg-zinc-800 px-2 py-1 font-mono text-xs text-zinc-500">
-                  {ref.branch}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeRef(i)}
-                  className="shrink-0 rounded-md p-1 text-zinc-400 transition-colors hover:bg-red-500/10 hover:text-red-400"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+                repo={ref}
+                onRemove={() => removeRef(i)}
+              />
             ))}
           </div>
         )}
@@ -1116,60 +1023,80 @@ export function NewJobForm({ prefill }: { prefill?: FormPrefill }) {
         )}
       </div>
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full rounded-lg bg-[#fe591f] px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-[#fe591f]/90 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {pending
-          ? "Creating…"
-          : prefill?.continueFrom
-            ? "Continue job"
-            : planMode
-              ? "Draft plan for review"
-              : "Run agent now"}
-      </button>
+      {/* Submit */}
+      <div className="sticky bottom-0 pt-2 pb-1 -mx-1 px-1 bg-gradient-to-t from-white via-white to-transparent dark:from-zinc-950 dark:via-zinc-950">
+        <button
+          type="submit"
+          disabled={pending}
+          className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#fe591f] px-4 py-3 text-[13px] font-medium text-white transition-all hover:bg-[#fe591f]/90 disabled:cursor-not-allowed disabled:opacity-50 shadow-[0_1px_0_rgba(255,255,255,0.15)_inset,0_8px_20px_-8px_rgba(254,89,31,0.5)]"
+        >
+          {pending ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Creating…
+            </>
+          ) : prefill?.continueFrom ? (
+            "Continue job"
+          ) : planMode ? (
+            <>
+              <ListTodo className="h-4 w-4" />
+              Draft plan for review
+            </>
+          ) : (
+            <>
+              <Zap className="h-4 w-4" />
+              Run agent now
+            </>
+          )}
+        </button>
+      </div>
     </form>
   );
 }
 
-function RadioPill({
-  name,
-  active,
-  onClick,
-  icon,
-  label,
+function RepoCard({
+  repo,
+  onRemove,
 }: {
-  name: string;
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
+  repo: SelectedRef;
+  onRemove: () => void;
 }) {
   return (
-    <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
-      <input
-        type="radio"
-        name={name}
-        checked={active}
-        onChange={onClick}
-        className="h-3.5 w-3.5 accent-[#fe591f]"
-      />
-      <span
-        className={`inline-flex items-center gap-1 ${
-          active
-            ? "text-zinc-900 dark:text-zinc-100 font-medium"
-            : "text-zinc-500 dark:text-zinc-400"
-        }`}
-      >
-        {icon}
-        {label}
+    <div className="group flex items-center gap-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-900/50 px-3 py-2.5 transition-colors hover:border-zinc-300 dark:hover:border-zinc-700">
+      <GitBranch className="h-4 w-4 shrink-0 text-zinc-400" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100 truncate">
+            {repo.fullName}
+          </span>
+          {repo.isPrivate && <PrivateBadge />}
+          {repo.language && (
+            <span className="shrink-0 rounded-full bg-zinc-200/60 dark:bg-zinc-800 px-2 py-0.5 text-[10px] font-medium text-zinc-500">
+              {repo.language}
+            </span>
+          )}
+        </div>
+        {repo.description && (
+          <p className="text-[11px] text-zinc-500 truncate mt-0.5">
+            {repo.description}
+          </p>
+        )}
+      </div>
+      <span className="shrink-0 rounded-md bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 px-2 py-0.5 font-mono text-[11px] text-zinc-500">
+        {repo.branch}
       </span>
-    </label>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="shrink-0 rounded-md p-1 text-zinc-400 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10 hover:text-red-500"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
   );
 }
 
-function ModeButton({
+function SegmentButton({
   active,
   onClick,
   icon,
@@ -1184,13 +1111,13 @@ function ModeButton({
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+      className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[12px] font-medium transition-all ${
         active
-          ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm"
-          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+          ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700"
+          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
       }`}
     >
-      {icon}
+      <span className={active ? "text-[#fe591f]" : ""}>{icon}</span>
       {label}
     </button>
   );
@@ -1253,17 +1180,17 @@ function RepoSearchDropdown({
   return (
     <div
       ref={containerRef}
-      className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg overflow-hidden"
+      className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950 shadow-lg overflow-hidden"
     >
       <div className="relative border-b border-zinc-200 dark:border-zinc-800">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
         <input
           ref={inputRef}
           type="text"
-          placeholder="Search repositories..."
+          placeholder="Search repositories…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="w-full bg-transparent px-3 py-2.5 pl-9 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none"
+          className="w-full bg-transparent px-3 py-2.5 pl-9 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none"
         />
         {loading && (
           <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-zinc-400" />
@@ -1280,12 +1207,12 @@ function RepoSearchDropdown({
             key={repo.fullName}
             type="button"
             onClick={() => onSelect(repo)}
-            className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800"
+            className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900"
           >
             <GitBranch className="h-4 w-4 shrink-0 text-zinc-400" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100 truncate">
+                <span className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100 truncate">
                   {repo.fullName}
                 </span>
                 {repo.isPrivate && <PrivateBadge />}
@@ -1296,7 +1223,7 @@ function RepoSearchDropdown({
                 )}
               </div>
               {repo.description && (
-                <p className="text-xs text-zinc-500 truncate">
+                <p className="text-[11px] text-zinc-500 truncate">
                   {repo.description}
                 </p>
               )}
@@ -1315,8 +1242,8 @@ interface Starter {
 }
 
 function buildStarters(_projectName?: string): Starter[] {
-  // Prompts mirror the patterns in docs/PROMPT-EXAMPLES.md so the agent
-  // gets the level of detail it needs to produce working Machina templates.
+  // NOTE: this list is unchanged from the previous implementation —
+  // re-copied from the original form.tsx at HEAD. See docs/PROMPT-EXAMPLES.md.
   return [
     {
       title: "Agent template from scratch",
@@ -1434,12 +1361,10 @@ The frontend should be in a separate directory: frontend-podcast-digest/`,
 
 ## Integrations
 - If the repo has a Makefile, add a \`make run-<name> ARGS=...\` target that calls the script.
-- If the repo is a Python/Node project, also expose the helper via package scripts so \`npm run <name>\` or \`uv run <name>\` works.
+- If the repo is a Python/Node project, also expose the helper as a package script (package.json or pyproject entry point) so contributors can run \`npm run run-<name>\` / \`uv run run-<name>\`.
 
 ## Docs
-- Update README with a "Running locally" section: prerequisites (\`machina login\`), the new command, example output.
-
-Don't try to execute the workflow yourself during the job — just write the code that lets a human run it easily afterwards.`,
+- Append a "Running locally" section to the repo README with a minimal example invocation.`,
     },
   ];
 }
@@ -1449,26 +1374,42 @@ function PromptStarters({
   onPick,
 }: {
   projectName?: string;
-  onPick: (text: string) => void;
+  onPick: (prompt: string) => void;
 }) {
-  const starters = buildStarters(projectName);
+  const starters = useMemo(() => buildStarters(projectName), [projectName]);
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="text-[11px] font-medium text-zinc-400 dark:text-zinc-500 mr-1">
-        Try:
-      </span>
-      {starters.map((s) => (
-        <button
-          key={s.title}
-          type="button"
-          onClick={() => onPick(s.prompt)}
-          title={s.subtitle}
-          className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-2.5 py-1 text-xs text-zinc-700 dark:text-zinc-300 transition-colors hover:border-[#fe591f] hover:bg-[#fe591f]/5 hover:text-[#fe591f]"
-        >
-          <Sparkles className="h-3 w-3 text-[#fe591f]" />
-          {s.title}
-        </button>
-      ))}
+    <div>
+      <div className="flex items-baseline justify-between mb-2">
+        <div className="text-[11px] uppercase tracking-[0.08em] font-semibold text-zinc-500 dark:text-zinc-400">
+          Start from an example
+        </div>
+        <div className="text-[10px] text-zinc-400 dark:text-zinc-500">
+          {starters.length} prompts
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {starters.map((s) => (
+          <button
+            key={s.title}
+            type="button"
+            onClick={() => onPick(s.prompt)}
+            className="group text-left rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2.5 transition-all hover:border-[#fe591f]/40 hover:bg-[#fe591f]/[0.03] hover:shadow-sm"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
+                <div className="text-[12.5px] font-medium text-zinc-900 dark:text-zinc-100 truncate group-hover:text-[#fe591f]">
+                  {s.title}
+                </div>
+                <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                  {s.subtitle}
+                </div>
+              </div>
+              <Plus className="h-3.5 w-3.5 shrink-0 text-zinc-300 dark:text-zinc-600 mt-0.5 group-hover:text-[#fe591f] transition-colors" />
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
+
